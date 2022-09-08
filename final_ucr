@@ -1,0 +1,219 @@
+#include <Servo.h>          //standard library for the servo
+#include <NewPing.h>        //for the Ultrasonic sensor function library.
+#include "HUSKYLENS.h"
+#include "SoftwareSerial.h"
+
+HUSKYLENS huskylens;
+SoftwareSerial mySerial(10, 11); // RX, TX
+//HUSKYLENS green line >> Pin 10; blue line >> Pin 11
+void printResult(HUSKYLENSResult result);
+
+//L298N motor control pins
+int enA = 2;
+const int in1 = 3;
+const int in2 = 4;
+const int in3 = 6;
+const int in4 = 5;
+int enB = 7;
+Servo Servo1;
+Servo Servo2;
+Servo Servo3;
+Servo Servo4;
+Servo Servo5;
+Servo Servo6;
+//sensor pins
+#define trig_pin 13 
+#define echo_pin 12 
+
+#define maximum_distance 200
+boolean goesForward = false;
+int distance = 100;
+
+NewPing sonar(trig_pin, echo_pin, maximum_distance); //sensor function
+Servo servo_motor; 
+
+void setup() {
+  Servo1.attach(41);
+  Servo2.attach(42);
+  Servo3.attach(43);
+  Servo4.attach(44);
+  Servo5.attach(45);
+  Servo6.attach(46);
+  // put your setup code here, to run once:
+Serial.begin(115200);
+    mySerial.begin(9600);
+    while (!huskylens.begin(mySerial))
+    {
+        Serial.println(F("Begin failed!"));
+        Serial.println(F("1.Please recheck the \"Protocol Type\" in HUSKYLENS (General Settings>>Protocol Type>>Serial 9600)"));
+        Serial.println(F("2.Please recheck the connection."));
+        delay(100);
+    }
+}
+
+void loop() {
+  // put your main code here, to run repeatedly:
+  distance = readPing();
+  int distanceRight = 0;
+  int distanceLeft = 0;
+//  delay(50);
+
+  if (distance <= 20){
+    moveStop();
+    delay(300);
+    moveBackward();
+    delay(400);
+    moveStop();
+    delay(300);
+     if (!huskylens.request()) Serial.println(F("Fail to request data from HUSKYLENS, recheck the connection!"));
+    else if(!huskylens.isLearned()) Serial.println(F("Nothing learned, press learn button on HUSKYLENS to learn one!"));
+    else if(!huskylens.available()) Serial.println(F("No block or arrow appears on the screen!"));
+    else
+    {
+        Serial.println(F("###########"));
+        while (huskylens.available())
+        {
+            HUSKYLENSResult result = huskylens.read();
+            printResult(result);
+        }    
+    }
+
+    distanceRight = lookRight();
+    delay(300);
+    distanceLeft = lookLeft();
+    delay(300);
+
+    if (distanceRight >= distanceLeft){
+      turnRight();
+//      moveStop();
+    }
+    else if(distanceLeft>=distanceRight){
+      turnLeft();
+//      moveStop();
+    }
+   else{
+    moveBackward();
+   }
+}
+  else{
+    moveForward(); 
+  }
+//    distance = readPing();
+Serial.println(F("###########"));
+ 
+            }
+
+int lookRight(){  
+  servo_motor.write(0);
+  delay(500);
+  distance = readPing();
+  delay(100);
+  servo_motor.write(90);
+  return distance;
+}
+
+int lookLeft(){
+  servo_motor.write(180);
+  delay(500);
+  distance = readPing();
+  delay(100);
+  servo_motor.write(90);
+  return distance;
+//  delay(100);
+}
+
+int readPing(){
+//  delay(70);
+  int cm = sonar.ping_cm();
+  if (cm==0){
+    cm=250;
+  }
+  return cm;
+}
+
+void moveStop(){
+  digitalWrite(enA, LOW);
+  digitalWrite(enB, LOW);
+  
+//  digitalWrite(in3, LOW);
+//  digitalWrite(in1, LOW);
+//  digitalWrite(in4, LOW);
+//  digitalWrite(in2, LOW);
+}
+
+void moveForward(){
+
+  if(!goesForward){
+
+    goesForward=true;
+    analogWrite(enA, 180);
+    analogWrite(enB, 180);
+    digitalWrite(in1, HIGH);
+    digitalWrite(in3, HIGH);
+    digitalWrite(in2, LOW);
+    digitalWrite(in4, LOW); 
+  }
+}
+
+void moveBackward(){
+
+  goesForward=false;
+
+  analogWrite(enA, 180);
+  analogWrite(enB, 180);
+
+  digitalWrite(in2, HIGH);
+  digitalWrite(in4, HIGH);
+  
+  digitalWrite(in1, LOW);
+  digitalWrite(in3, LOW);
+  
+}
+
+void turnLeft(){
+  analogWrite(enA, 180);
+  analogWrite(enB, 180);
+  
+  digitalWrite(in1, HIGH);
+  digitalWrite(in2, LOW);
+
+  digitalWrite(in3, LOW);
+  digitalWrite(in4, HIGH);
+  
+  
+  delay(500);
+  
+  digitalWrite(enA, LOW);
+  digitalWrite(enB, LOW);
+ 
+  
+  
+}
+
+void turnRight(){
+analogWrite(enA, 180);
+  analogWrite(enB, 180);
+
+  digitalWrite(in1, LOW);
+  digitalWrite(in2, HIGH);
+  
+  digitalWrite(in3, HIGH);
+  digitalWrite(in4, LOW);
+
+  delay(500);
+  digitalWrite(enA, LOW);
+  digitalWrite(enB, LOW);
+  
+}
+
+void printResult(HUSKYLENSResult result){
+    if (result.command == COMMAND_RETURN_BLOCK){
+        Serial.println(String()+F("Block:xCenter=")+result.xCenter+F(",yCenter=")+result.yCenter+F(",width=")+result.width+F(",height=")+result.height+F(",ID=")+result.ID);
+    }
+    else if (result.command == COMMAND_RETURN_ARROW){
+        Serial.println(String()+F("Arrow:xOrigin=")+result.xOrigin+F(",yOrigin=")+result.yOrigin+F(",xTarget=")+result.xTarget+F(",yTarget=")+result.yTarget+F(",ID=")+result.ID);
+    }
+    else{
+        Serial.println("Object unknown!");
+    }
+}
